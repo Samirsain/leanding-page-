@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { Suspense, useEffect, useState } from 'react'
+import { useParams, useSearchParams } from 'next/navigation'
 import LandingPage from '@/components/landing-page'
 
 interface StoredLink {
@@ -11,32 +11,60 @@ interface StoredLink {
   createdAt: string
 }
 
-export default function LinkPage() {
+// Inner component that uses useSearchParams (must be inside Suspense)
+function LinkPageInner() {
   const params = useParams()
+  const searchParams = useSearchParams()
   const slug = params.slug as string
-  const [link, setLink] = useState<StoredLink | null>(null)
+
+  const [redirectUrl, setRedirectUrl] = useState<string | null>(null)
   const [error, setError] = useState(false)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Find the link in localStorage
+    // ✅ Priority 1: Read redirect URL from ?r= query param
+    // Works in ALL browsers — Facebook IAB, Instagram, Chrome, Safari, etc.
+    // No localStorage needed, so sharing works cross-device and cross-session.
+    const encodedUrl = searchParams.get('r')
+    if (encodedUrl) {
+      try {
+        const decoded = decodeURIComponent(encodedUrl)
+        setRedirectUrl(decoded)
+        setLoading(false)
+        return
+      } catch {
+        // decoding failed, fall through
+      }
+    }
+
+    // ✅ Priority 2: Fallback to localStorage (backward compat for old links)
     try {
       const stored = localStorage.getItem('paisawin_links')
       if (stored) {
         const links: StoredLink[] = JSON.parse(stored)
         const foundLink = links.find((l) => l.slug === slug)
         if (foundLink) {
-          setLink(foundLink)
-        } else {
-          setError(true)
+          setRedirectUrl(foundLink.url)
+          setLoading(false)
+          return
         }
-      } else {
-        setError(true)
       }
     } catch (err) {
-      console.error('Error loading link:', err)
-      setError(true)
+      console.error('Error loading link from localStorage:', err)
     }
-  }, [slug])
+
+    // Nothing found
+    setError(true)
+    setLoading(false)
+  }, [slug, searchParams])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-800 to-blue-800 flex items-center justify-center">
+        <div className="text-yellow-300 text-2xl font-bold animate-pulse">Loading...</div>
+      </div>
+    )
+  }
 
   if (error) {
     return (
@@ -55,5 +83,20 @@ export default function LinkPage() {
     )
   }
 
-  return <LandingPage redirectUrl={link?.url} />
+  return <LandingPage redirectUrl={redirectUrl} />
+}
+
+// Suspense wrapper required by Next.js for useSearchParams
+export default function LinkPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-800 to-blue-800 flex items-center justify-center">
+          <div className="text-yellow-300 text-2xl font-bold animate-pulse">Loading...</div>
+        </div>
+      }
+    >
+      <LinkPageInner />
+    </Suspense>
+  )
 }

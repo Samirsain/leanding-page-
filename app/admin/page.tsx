@@ -76,10 +76,15 @@ export default function AdminPanel() {
     localStorage.setItem('paisawin_links', JSON.stringify(updated))
   }
 
-  // Copy to clipboard
+  // Copy to clipboard — encode redirect URL directly so it works in FB browser too
   const handleCopyLink = (slug: string) => {
-    const link = `${window.location.origin}/link/${slug}`
-    navigator.clipboard.writeText(link)
+    const linkObj = links.find((l) => l.slug === slug)
+    let shareableLink = `${window.location.origin}/link/${slug}`
+    if (linkObj?.url) {
+      // Encode redirect URL as query param so FB browser / any browser can read it
+      shareableLink += `?r=${encodeURIComponent(linkObj.url)}`
+    }
+    navigator.clipboard.writeText(shareableLink)
     setCopied(slug)
     setTimeout(() => setCopied(null), 2000)
   }
@@ -153,7 +158,7 @@ export default function AdminPanel() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-gray-300 truncate mb-1">
                       <span className="text-yellow-300 font-mono">
-                        {window.location.origin}/link/{link.slug}
+                        {window.location.origin}/link/{link.slug}?r=...
                       </span>
                     </p>
                     <p className="text-xs text-gray-400 truncate">
