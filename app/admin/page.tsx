@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Copy, Trash2, Plus } from 'lucide-react'
+import { Copy, Trash2, Plus, LogOut, Lock } from 'lucide-react'
 
 interface StoredLink {
   id: string
@@ -16,8 +16,15 @@ export default function AdminPanel() {
   const [copied, setCopied] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [origin, setOrigin] = useState('')
 
-  // Load links from localStorage on mount
+  // Authentication states
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
+  const [loginError, setLoginError] = useState('')
+
+  // Load links and auth status from sessionStorage/localStorage on mount
   useEffect(() => {
     try {
       const stored = localStorage.getItem('paisawin_links')
@@ -27,7 +34,35 @@ export default function AdminPanel() {
     } catch (err) {
       console.error('Error loading links:', err)
     }
+
+    if (typeof window !== 'undefined') {
+      setOrigin(window.location.origin)
+      const isAuth = sessionStorage.getItem('paisawin_authenticated') === 'true'
+      if (isAuth) {
+        setIsLoggedIn(true)
+      }
+    }
   }, [])
+
+  // Handle Login submission
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (username === 'admin' && password === 'admin123') {
+      sessionStorage.setItem('paisawin_authenticated', 'true')
+      setIsLoggedIn(true)
+      setLoginError('')
+    } else {
+      setLoginError('Invalid username or password')
+    }
+  }
+
+  // Handle Logout
+  const handleLogout = () => {
+    sessionStorage.removeItem('paisawin_authenticated')
+    setIsLoggedIn(false)
+    setUsername('')
+    setPassword('')
+  }
 
   // Generate unique slug
   const generateSlug = () => {
@@ -79,7 +114,7 @@ export default function AdminPanel() {
   // Copy to clipboard — encode redirect URL directly so it works in FB browser too
   const handleCopyLink = (slug: string) => {
     const linkObj = links.find((l) => l.slug === slug)
-    let shareableLink = `${window.location.origin}/link/${slug}`
+    let shareableLink = `${origin || window.location.origin}/link/${slug}`
     if (linkObj?.url) {
       // Encode redirect URL as query param so FB browser / any browser can read it
       shareableLink += `?r=${encodeURIComponent(linkObj.url)}`
@@ -89,15 +124,87 @@ export default function AdminPanel() {
     setTimeout(() => setCopied(null), 2000)
   }
 
+  // Render Login screen if not authenticated
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-800 to-blue-800 flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-8 shadow-2xl relative overflow-hidden">
+          {/* Subtle glowing elements */}
+          <div className="absolute -top-10 -right-10 w-32 h-32 bg-yellow-500/10 rounded-full blur-2xl pointer-events-none" />
+          <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl pointer-events-none" />
+
+          <div className="text-center mb-8 relative z-10">
+            <div className="inline-flex p-3 bg-yellow-400/10 rounded-full border border-yellow-400/20 text-yellow-300 mb-4 animate-pulse">
+              <Lock size={28} />
+            </div>
+            <h1 className="text-3xl font-black text-yellow-300 drop-shadow-lg mb-2 tracking-wider">
+              PAISAWIN
+            </h1>
+            <p className="text-gray-200 text-sm font-medium">Admin Control Panel Authentication</p>
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-5 relative z-10">
+            {loginError && (
+              <div className="bg-red-500/20 border border-red-500/40 text-red-200 px-4 py-3 rounded-lg text-sm text-center">
+                {loginError}
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-gray-200 block">Username</label>
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Enter username"
+                className="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:border-yellow-300 focus:ring-1 focus:ring-yellow-300 transition"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-gray-200 block">Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter password"
+                className="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-gray-400 focus:outline-none focus:border-yellow-300 focus:ring-1 focus:ring-yellow-300 transition"
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="w-full bg-gradient-to-r from-yellow-400 to-yellow-600 hover:from-yellow-500 hover:to-yellow-700 text-gray-900 font-bold py-3 rounded-lg transition transform hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-yellow-500/20"
+            >
+              Sign In
+            </button>
+          </form>
+        </div>
+      </div>
+    )
+  }
+
+  // Render Admin Panel if authenticated
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-800 to-blue-800 p-4 md:p-8">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-black text-yellow-300 drop-shadow-lg mb-2">
-            PAISAWIN Admin
-          </h1>
-          <p className="text-gray-200">Create and manage your promotional links</p>
+        <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl p-6">
+          <div>
+            <h1 className="text-4xl font-black text-yellow-300 drop-shadow-lg mb-2">
+              PAISAWIN Admin
+            </h1>
+            <p className="text-gray-200">Create and manage your promotional links</p>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="self-start sm:self-center bg-red-500/20 hover:bg-red-500/40 text-red-200 font-semibold py-2.5 px-4 rounded-lg border border-red-500/30 transition text-sm flex items-center gap-2"
+          >
+            <LogOut size={16} />
+            Logout
+          </button>
         </div>
 
         {/* Add new link form */}
@@ -158,7 +265,7 @@ export default function AdminPanel() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-gray-300 truncate mb-1">
                       <span className="text-yellow-300 font-mono">
-                        {window.location.origin}/link/{link.slug}?r=...
+                        {origin}/link/{link.slug}?r=...
                       </span>
                     </p>
                     <p className="text-xs text-gray-400 truncate">
